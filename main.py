@@ -1,19 +1,25 @@
-from fastapi import FastAPI
-from youtube import get_channel_videos
+from fastapi import FastAPI, Query
+from youtube import get_channel_data
 from utils import analyze_periodicity
 
 app = FastAPI()
 
+
 @app.get("/")
-def root():
-    return {"message": "YouTube Analytics API Running"}
+def home():
+    return {"status": "YouTube Analytics Tool running"}
+
 
 @app.get("/analytics")
-def analytics(channel: str):
-    videos, err = get_channel_videos(channel)
+def analytics(channel: str = Query(..., description="YouTube channel name")):
+    data, error = get_channel_data(channel)
 
-    if err:
-        return {"error": err}
+    if error:
+        return {"error": error}
 
-    stats = analyze_periodicity(videos)
-    return stats
+    stats = analyze_periodicity(data["videos"])
+
+    return {
+        "channel": data["channel"],
+        "analytics": stats
+    }
