@@ -125,7 +125,6 @@ def get_channel_data(query):
 
     videos = get_all_uploaded_videos(metadata["uploads_playlist_id"])
 
-    # Fetch durations
     video_ids = [v["videoId"] for v in videos]
     durations = get_video_durations(video_ids)
 
