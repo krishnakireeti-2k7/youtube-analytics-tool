@@ -4,16 +4,14 @@ from utils import analyze_periodicity, rank_channel_candidates
 
 app = FastAPI()
 
-
 @app.get("/")
 def health():
     return {"status": "ok"}
 
-
 @app.get("/analytics")
 def analytics(
     channel: str = Query(..., description="Channel name"),
-    scope: str = Query("90", description="Scope in days (e.g. 15, 30, 90, lifetime)"),
+    scope: str = Query("90d", description="Analysis scope: 30d, 90d, 180d, 365d, lifetime"),
     auto_select: bool = True
 ):
     # 1. Resolve channel ambiguity
@@ -23,6 +21,8 @@ def analytics(
 
     # 2. Rank candidates
     ranked = rank_channel_candidates(channel, candidates)
+
+    # 3. Auto-pick best channel
     selected = ranked[0]
 
     if not auto_select and selected["confidence_score"] < 0.85:
@@ -31,13 +31,13 @@ def analytics(
             "candidates": ranked
         }
 
-    # 3. Fetch videos
+    # 4. Fetch videos
     videos = get_channel_videos(selected)
 
-    # 4. Run analytics (scope-aware)
-    analytics = analyze_periodicity(videos, scope)
+    # 5. Run analytics (scope-aware, with graphs)
+    analytics_data = analyze_periodicity(videos, scope=scope)
 
     return {
         "channel": selected,
-        "analytics": analytics
+        "analytics": analytics_data
     }
