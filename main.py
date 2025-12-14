@@ -13,6 +13,7 @@ def health():
 @app.get("/analytics")
 def analytics(
     channel: str = Query(..., description="Channel name"),
+    scope: str = Query("90", description="Scope in days (e.g. 15, 30, 90, lifetime)"),
     auto_select: bool = True
 ):
     # 1. Resolve channel ambiguity
@@ -22,8 +23,6 @@ def analytics(
 
     # 2. Rank candidates
     ranked = rank_channel_candidates(channel, candidates)
-
-    # 3. Auto-pick best channel (safe default)
     selected = ranked[0]
 
     if not auto_select and selected["confidence_score"] < 0.85:
@@ -32,11 +31,11 @@ def analytics(
             "candidates": ranked
         }
 
-    # 4. Fetch videos
+    # 3. Fetch videos
     videos = get_channel_videos(selected)
 
-    # 5. Run analytics
-    analytics = analyze_periodicity(videos)
+    # 4. Run analytics (scope-aware)
+    analytics = analyze_periodicity(videos, scope)
 
     return {
         "channel": selected,
