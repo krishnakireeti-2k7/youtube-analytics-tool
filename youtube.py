@@ -8,51 +8,62 @@ API_KEY = os.getenv("YOUTUBE_API_KEY")
 BASE_URL = "https://www.googleapis.com/youtube/v3/"
 
 
-# ---------- SEARCH CHANNEL ----------
-def search_channel(query):
+# ---------- SEARCH CHANNELS (AMBIGUITY SAFE) ----------
+def search_channels(query, max_results=5):
     url = f"{BASE_URL}search"
     params = {
         "part": "snippet",
         "type": "channel",
         "q": query,
-        "maxResults": 1,
+        "maxResults": max_results,
         "key": API_KEY
     }
 
     r = requests.get(url, params=params).json()
 
     if not r.get("items"):
-        return None
+        return []
 
-    return r["items"][0]["snippet"]["channelId"]
+    return [
+        {
+            "channel_id": item["snippet"]["channelId"],
+            "title": item["snippet"]["title"],
+            "description": item["snippet"].get("description", ""),
+            "thumbnail": item["snippet"]["thumbnails"]["high"]["url"]
+        }
+        for item in r["items"]
+    ]
 
 
-# ---------- CHANNEL METADATA ----------
-def get_channel_metadata(channel_id):
+# ---------- MULTI CHANNEL METADATA ----------
+def get_multiple_channel_metadata(channel_ids):
     url = f"{BASE_URL}channels"
     params = {
         "part": "snippet,statistics,contentDetails",
-        "id": channel_id,
+        "id": ",".join(channel_ids),
         "key": API_KEY
     }
 
     r = requests.get(url, params=params).json()
 
     if not r.get("items"):
-        return None
+        return []
 
-    item = r["items"][0]
+    channels = []
 
-    return {
-        "channel_id": channel_id,
-        "title": item["snippet"]["title"],
-        "description": item["snippet"].get("description", ""),
-        "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
-        "subscriber_count": int(item["statistics"].get("subscriberCount", 0)),
-        "total_views": int(item["statistics"].get("viewCount", 0)),
-        "video_count": int(item["statistics"].get("videoCount", 0)),
-        "uploads_playlist_id": item["contentDetails"]["relatedPlaylists"]["uploads"]
-    }
+    for item in r["items"]:
+        channels.append({
+            "channel_id": item["id"],
+            "title": item["snippet"]["title"],
+            "description": item["snippet"].get("description", ""),
+            "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
+            "subscriber_count": int(item["statistics"].get("subscriberCount", 0)),
+            "total_views": int(item["statistics"].get("viewCount", 0)),
+            "video_count": int(item["statistics"].get("videoCount", 0)),
+            "uploads_playlist_id": item["contentDetails"]["relatedPlaylists"]["uploads"]
+        })
+
+    return channels
 
 
 # ---------- PLAYLIST VIDEOS ----------
@@ -113,17 +124,21 @@ def get_video_durations(video_ids):
     return durations
 
 
-# ---------- MAIN ENTRY ----------
-def get_channel_data(query):
-    channel_id = search_channel(query)
-    if not channel_id:
-        return None, "Channel not found"
+# ---------- FINAL RESOLVER ----------
+def resolve_channel(query):
+    candidates = search_channels(query)
 
-    metadata = get_channel_metadata(channel_id)
-    if not metadata:
-        return None, "Failed to fetch channel metadata"
+    if not candidates:
+        return None, "No channels found"
 
-    videos = get_all_uploaded_videos(metadata["uploads_playlist_id"])
+    channel_ids = [c["channel_id"] for c in candidates]
+    metadata = get_multiple_channel_metadata(channel_ids)
+
+    return metadata, None
+
+
+def get_channel_videos(channel):
+    videos = get_all_uploaded_videos(channel["uploads_playlist_id"])
 
     video_ids = [v["videoId"] for v in videos]
     durations = get_video_durations(video_ids)
@@ -131,7 +146,4 @@ def get_channel_data(query):
     for v in videos:
         v["duration"] = durations.get(v["videoId"])
 
-    return {
-        "channel": metadata,
-        "videos": videos
-    }, None
+    return videos

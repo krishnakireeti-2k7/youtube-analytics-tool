@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+from difflib import SequenceMatcher
 
 
 # ---------- DURATION PARSER ----------
@@ -20,7 +21,36 @@ def parse_duration_seconds(iso_duration):
     return hours * 3600 + minutes * 60 + seconds
 
 
-# ---------- CORE METRIC ENGINE ----------
+# ---------- CHANNEL RANKING ----------
+def similarity(a, b):
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
+def rank_channel_candidates(query, channels):
+    ranked = []
+
+    for ch in channels:
+        name_score = similarity(query, ch["title"])
+        subs_score = min(ch["subscriber_count"] / 1_000_000, 1)
+        video_score = min(ch["video_count"] / 1000, 1)
+
+        confidence = round(
+            0.5 * name_score +
+            0.35 * subs_score +
+            0.15 * video_score,
+            3
+        )
+
+        ranked.append({
+            **ch,
+            "confidence_score": confidence
+        })
+
+    ranked.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return ranked
+
+
+# ---------- METRIC ENGINE ----------
 def compute_metrics(df):
     if len(df) < 2:
         return {"insufficient_data": True}
@@ -62,7 +92,7 @@ def compute_metrics(df):
     }
 
 
-# ---------- PUBLIC ANALYTICS API ----------
+# ---------- PUBLIC ANALYTICS ----------
 def analyze_periodicity(videos):
     if len(videos) < 2:
         return {"error": "Not enough videos for analysis"}
@@ -84,9 +114,8 @@ def analyze_periodicity(videos):
         "overall": {
             "total_videos": len(df),
             "long_form_videos": len(long_df),
-            "short_form_videos": len(short_df),
+            "short_form_videos": len(short_df)
         },
-
         "long_form": compute_metrics(long_df),
-        "short_form": compute_metrics(short_df),
+        "short_form": compute_metrics(short_df)
     }
