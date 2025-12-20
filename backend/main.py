@@ -43,7 +43,7 @@ def analytics(
     candidates, error = resolve_channel(channel)
     if error:
         return {"error": error}
-
+    
     # 2. Rank candidates
     ranked = rank_channel_candidates(channel, candidates)
 
